@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kudu.fullname" . }}-master-headless
+  labels:
+    app.kubernetes.io/name: {{ include "kudu.name" . }}
+    helm.sh/chart: {{ include "kudu.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - port: 8051
+      targetPort: ui
+      name: ui
+    - port: 7051
+      targetPort: rpc
+      name: rpc
+  selector:
+    app.kubernetes.io/name: {{ include "kudu.name" . }}
+    helm.sh/chart: {{ include "kudu.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}

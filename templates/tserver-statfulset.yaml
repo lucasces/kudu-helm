@@ -1,0 +1,102 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "kudu.fullname" . }}-tserver
+  labels:
+    app.kubernetes.io/name: {{ include "kudu.name" . }}
+    helm.sh/chart: {{ include "kudu.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    role: tserver
+spec:
+  podManagementPolicy: Parallel
+  serviceName: {{ include "kudu.fullname" . }}-tserver-headless
+  replicas: {{ .Values.tserver.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "kudu.name" . }}
+      helm.sh/chart: {{ include "kudu.chart" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      role: tserver
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "kudu.name" . }}
+        helm.sh/chart: {{ include "kudu.chart" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+        role: tserver
+    spec:
+      securityContext:
+        fsGroup: 1000
+      containers:
+      - name: kudu-tserver
+        image: {{ .Values.image.repository }}:{{.Values.image.version}}
+        imagePullPolicy: {{ .Values.image.imagePullPolicy }}
+        args: ["tserver"]
+        securityContext:
+          privileged: true
+          capabilities:
+            add:
+              - IPC_LOCK
+        env:
+        - name: NAMESPACE
+          value: {{ .Release.Namespace }}
+        - name: DATA_DIR
+          value: "/data"
+        - name: KUDU_HOME
+          value: "/opt/kudu"
+        - name: KUDU_MASTERS
+          value: {{ template "masterList" . }}
+        - name: TSERVER_ARGS
+          value: "--fs_wal_dir=/data/tserver \
+            --webserver_doc_root=/opt/kudu/www \
+            --logtostderr \
+            --use_hybrid_clock=false"
+        ports:
+        - containerPort: 8050
+          name: ui
+        - containerPort: 7050
+          name: rpc
+        livenessProbe:
+          httpGet:
+            path: "/"
+            port: ui
+          initialDelaySeconds: 120
+          timeoutSeconds: 1
+        readinessProbe:
+          timeoutSeconds: 1
+          httpGet:
+            path: "/"
+            port: ui
+        volumeMounts:
+        - name: storage-tserver
+          mountPath: /data
+          readOnly: false
+        resources:
+  {{ toYaml .Values.tserver.resources | indent 12 }}
+  {{- with .Values.tserver.nodeSelector }}
+  nodeSelector:
+  {{ toYaml . | indent 8 }}
+  {{- end }}
+  {{- with .Values.tserver.affinity }}
+  affinity:
+  {{ toYaml . | indent 8 }}
+  {{- end }}
+  {{- with .Values.tserver.tolerations }}
+  tolerations:
+  {{ toYaml . | indent 8 }}
+  {{- end }}
+  volumeClaimTemplates:
+  - metadata:
+      name: storage-tserver
+      annotations:
+        volume.beta.kubernetes.io/storage-class: {{ .Values.tserver.storageClass }}
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: {{ .Values.tserver.storageSize }}
+        limits:
+          storage: {{ .Values.tserver.storageSize }}
